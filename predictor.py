@@ -54,4 +54,52 @@ def forecast_future(df, model, scaler, features, days=5):
             'Volume': row['Volume'].values[0],
         }
         # Add rolling features
+        window = last_known.tail(50)    # Enough for SMA_50
+        next_row['SMA_10'] = window['Close'].rolling(10).mean().iloc[-1]
+        next_row['SMA_50'] = window['Close'].rolling(50).mean().iloc[-1]
+        next_row['Return'] = window['Close'].pct_change().iloc[-1]
+        next_row['Volatility'] = window['Return'].rolling(10).std().iloc[-1]
 
+        next_features = pd.DataFrame([next_row])[features]
+        next_scaled = scaler.transform(next_features)
+        next_close = model.predict(next_scaled)[0]
+
+        new_date = last_known.index[-1] + pd.Timedelta(days=1)
+        while new_date.weekday() >= 5:  # Skip weekends
+            new_date += pd.Timedelta(days=1)
+
+        future_dates.append((new_date, next_close))
+
+        # Append synthetic row for next iteration
+        new_row = row.copy()
+        new_row.index = [new_date]
+        new_row['Close'] = next_close
+        last_known = pd.concat([last_known, new_row])
+
+    return future_dates
+
+def run_prediction(stock_symbol, forecast_days):
+    df = get_data(stock_symbol)
+    df = add_features(df)
+
+    features = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_10', 'SMA_50', 'Return', 'Volatility']
+    df['Prediction'] = df['Close'].shift(-forecast_days)
+    df.dropna(inplace=True)
+
+    x = df[features].values
+    y = df['Prediction'].values
+
+    scaler = StandardScaler()
+    x_scaled = scaler.fit_transform(x)
+
+    model_results = train_model(x_scaled, y)
+    best_model_name = min(model_results, key=lambda x: model_results[x][1])
+    best_model, best_mse = model_results[best_model_name]
+
+    future_forecast = forecast_future(df, best_model, scaler, features, forecast_days)
+    return {
+        'historical': df,
+        'forecast': future_forecast,
+        'model': best_model_name,
+        'mse': best_mse
+    }
