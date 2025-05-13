@@ -1,21 +1,27 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error
-import datetime
 
-def get_data(stock_symbol, period="5y"):
+
+def get_data(stock_symbol, period='5y'):
+    """
+    Download historical data for a stock symbol from Yahoo Finance.
+    """
     df = yf.download(stock_symbol, period=period)
     df.dropna(inplace=True)
     return df
 
+#
 def add_features(df):
+    """
+    Add additional features (technical indicators) to the DataFrame for model training.
+    """
     df['SMA_10'] = df['Close'].rolling(10).mean()
     df['SMA_50'] = df['Close'].rolling(50).mean()
     df['Return'] = df['Close'].pct_change()
@@ -24,6 +30,10 @@ def add_features(df):
     return df
 
 def train_model(X, y):
+    """
+    Train multiple machine learning models and evaluate their mean squared error.
+    Returns the models and their MSEs.
+    """
     models = {
         'Linear Regression': LinearRegression(),
         'Random Forest': RandomForestRegressor(),
@@ -39,6 +49,10 @@ def train_model(X, y):
     return results
 
 def forecast_future(df, model, scaler, features, days=5):
+    """
+    Forecast future stock prices using the trained model.
+    It uses the last known row and extends it iteratively day-by-day.
+    """
     future_dates = []
     last_known = df.copy()
 
@@ -60,10 +74,18 @@ def forecast_future(df, model, scaler, features, days=5):
         next_row['Return'] = window['Close'].pct_change().iloc[-1]
         next_row['Volatility'] = window['Return'].rolling(10).std().iloc[-1]
 
+        # Convert to dataframe and drop missing values
         next_features = pd.DataFrame([next_row])[features]
+
+        if next_features[features].isnull().values.any():
+            print('Skipping day due to missing features')
+            break
+
+        # Scale and predict
         next_scaled = scaler.transform(next_features)
         next_close = model.predict(next_scaled)[0]
 
+        # Add next valid date
         new_date = last_known.index[-1] + pd.Timedelta(days=1)
         while new_date.weekday() >= 5:  # Skip weekends
             new_date += pd.Timedelta(days=1)
@@ -79,6 +101,14 @@ def forecast_future(df, model, scaler, features, days=5):
     return future_dates
 
 def run_prediction(stock_symbol, forecast_days):
+    """
+    End-to-end function to:
+    - Fetch data
+    - Engineer features
+    - Train models
+    - Select the best model
+    - Forecast future prices
+    """
     df = get_data(stock_symbol)
     df = add_features(df)
 
@@ -98,7 +128,7 @@ def run_prediction(stock_symbol, forecast_days):
 
     future_forecast = forecast_future(df, best_model, scaler, features, forecast_days)
     return {
-        'historical': df,
+        'historical': df.copy(),
         'forecast': future_forecast,
         'model': best_model_name,
         'mse': best_mse
