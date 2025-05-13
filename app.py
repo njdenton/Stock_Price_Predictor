@@ -26,6 +26,7 @@ if st.button('Predict'):
     future_df['Date'] = pd.to_datetime(future_df['Date'], errors='coerce')
     future_df['Forecast'] = pd.to_numeric(future_df['Forecast'], errors='coerce')
     future_df.dropna(inplace=True)
+    future_df.sort_values('Date', inplace=True)
     future_df.set_index('Date', inplace=True)
     if future_df.empty:
         st.error('No forecast data available.')
@@ -41,6 +42,7 @@ if st.button('Predict'):
         pd.DataFrame({'Forecast': [last_close]}, index=[last_date]),
         future_df
     ])
+    combined_forecast.sort_index(inplace=True)
 
     # Ensure the index is datetime and Forecast is numeric
     combined_forecast.index = pd.to_datetime(combined_forecast.index, errors='coerce')

@@ -113,7 +113,7 @@ def run_prediction(stock_symbol, forecast_days):
     df = add_features(df)
 
     features = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_10', 'SMA_50', 'Return', 'Volatility']
-    df['Prediction'] = df['Close'].shift(-forecast_days)
+    df['Prediction'] = df['Close'].shift(-1)
     df.dropna(inplace=True)
 
     x = df[features].values
